@@ -1,0 +1,6 @@
+{
+  "name": "edgeone-live-api",
+  "version": "1.0.0",
+  "description": "Extract live streams and output as M3U/TXT",
+  "main": "_worker.js"
+}
