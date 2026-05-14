@@ -18,16 +18,17 @@ export async function GET() {
     let content = '清流直连,#genre#\n';
     
     liveEvents.forEach(event => {
-      const title = `${event.hname} VS ${event.aname}`;
+      // 紧凑格式：联赛名:主队_VS_客队
+      const title = `${event.lname}:${event.hname}_VS_${event.aname}`;
       
       // 线路 1: m3u8
       if (event.stream && event.stream.m3u8) {
-        content += `${title} (m3u8),${event.stream.m3u8}\n`;
+        content += `${title}(m3u8),${event.stream.m3u8}\n`;
       }
       
       // 线路 2: flv
       if (event.stream && event.stream.flv) {
-        content += `${title} (flv),${event.stream.flv}\n`;
+        content += `${title}(flv),${event.stream.flv}\n`;
       }
     });
 
