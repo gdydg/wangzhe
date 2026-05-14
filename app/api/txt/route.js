@@ -1,3 +1,4 @@
+// 强制使用 Edge Runtime
 export const runtime = 'edge';
 
 export async function GET() {
@@ -12,14 +13,37 @@ export async function GET() {
 
     const jsonData = await apiResponse.json();
     
-    // 过滤出 "直播中" 的赛事
-    const liveEvents = jsonData.data.filter(item => item.gameStage === '直播中');
+    const nowMs = Date.now();
+    const thirtyMinsLaterMs = nowMs + 30 * 60 * 1000;
+    const bufferPastMs = nowMs - 15 * 60 * 1000;
+    
+    const liveEvents = jsonData.data
+      .map(item => {
+        let gameTimeMs = 0;
+        let shortTime = '00:00';
+        
+        if (item.gameTime) {
+          const timeString = item.gameTime.includes('+') || item.gameTime.includes('Z') 
+            ? item.gameTime 
+            : `${item.gameTime}+08:00`;
+          gameTimeMs = new Date(timeString).getTime();
+          shortTime = item.gameTime.substring(11, 16);
+        }
+        
+        return { ...item, gameTimeMs, shortTime };
+      })
+      .filter(item => {
+        if (item.gameStage === '直播中') return true;
+        if (item.gameTimeMs >= bufferPastMs && item.gameTimeMs <= thirtyMinsLaterMs) return true;
+        return false;
+      })
+      .sort((a, b) => b.gameTimeMs - a.gameTimeMs); // 降序排队
 
     let content = '清流直连,#genre#\n';
     
     liveEvents.forEach(event => {
-      // 紧凑格式：联赛名:主队_VS_客队
-      const title = `${event.lname}:${event.hname}_VS_${event.aname}`;
+      // 拼接时间标：[19:00]联赛名:主队_VS_客队
+      const title = `[${event.shortTime}]${event.lname}:${event.hname}_VS_${event.aname}`;
       
       // 线路 1: m3u8
       if (event.stream && event.stream.m3u8) {
