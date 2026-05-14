@@ -20,19 +20,20 @@ export async function GET() {
     let content = '#EXTM3U\n';
     
     liveEvents.forEach(event => {
-      const title = `${event.hname} VS ${event.aname}`;
+      // 紧凑格式：联赛名:主队_VS_客队
+      const title = `${event.lname}:${event.hname}_VS_${event.aname}`;
       const logo = event.hicon || ''; // 主场球队图标
       const group = '清流直连';
       
       // 线路 1: m3u8
       if (event.stream && event.stream.m3u8) {
-        content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${title} (m3u8)\n`;
+        content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${title}(m3u8)\n`;
         content += `${event.stream.m3u8}\n`;
       }
       
       // 线路 2: flv
       if (event.stream && event.stream.flv) {
-        content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${title} (flv)\n`;
+        content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${title}(flv)\n`;
         content += `${event.stream.flv}\n`;
       }
     });
