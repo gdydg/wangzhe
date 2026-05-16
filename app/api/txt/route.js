@@ -1,12 +1,23 @@
 // 强制使用 Edge Runtime
 export const runtime = 'edge';
 
+// 安全获取 KV 数据库实例的封装函数（与 M3U 版本保持绝对一致）
+function getCacheDB() {
+  if (typeof globalThis !== 'undefined' && globalThis.SYS_CACHE) {
+    return globalThis.SYS_CACHE;
+  }
+  if (typeof process !== 'undefined' && process.env && process.env.SYS_CACHE) {
+    return process.env.SYS_CACHE;
+  }
+  return null;
+}
+
 export async function GET() {
   try {
     const nowMs = Date.now();
     const thirtyMinsLaterMs = nowMs + 30 * 60 * 1000;      // 未来 30 分钟
     const twoHoursMs = 2 * 60 * 60 * 1000;                 // 锁定阈值：2 小时
-    const fourHoursAgoMs = nowMs - 4 * 60 * 60 * 1000;     // 清理阈值：过去 4 小时 
+    const fourHoursAgoMs = nowMs - 4 * 60 * 60 * 1000;     // 清理阈值：过去 4 小时
 
     // ==========================================
     // 1. 拉取外部目标源站数据
@@ -35,10 +46,11 @@ export async function GET() {
     // ==========================================
     // 2. 从系统缓存中读取历史同步数据
     // ==========================================
+    const cacheDB = getCacheDB();
     let historyData = [];
-    if (process.env.SYS_CACHE) {
+    if (cacheDB) {
       try {
-        historyData = await process.env.SYS_CACHE.get('data_sync_list', { type: 'json' }) || [];
+        historyData = await cacheDB.get('data_sync_list', { type: 'json' }) || [];
       } catch (e) {
         console.error('Cache read error:', e);
       }
@@ -79,8 +91,8 @@ export async function GET() {
     // ==========================================
     // 5. 将更新后的干净数据同步回系统缓存 KV
     // ==========================================
-    if (process.env.SYS_CACHE) {
-      await process.env.SYS_CACHE.put('data_sync_list', JSON.stringify(finalData));
+    if (cacheDB) {
+      await cacheDB.put('data_sync_list', JSON.stringify(finalData));
     }
 
     // ==========================================
@@ -101,7 +113,7 @@ export async function GET() {
         }
       };
 
-      // 多线路全量提取
+      // 多线路全量提取（包含默认流、备用流、英文流）
       extractStreamsTxt(event.stream, '标清');
       extractStreamsTxt(event.streamAmAli, '高清中文');
       if (event.streamNa && event.streamNa.live) {
