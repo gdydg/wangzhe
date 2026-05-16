@@ -1,15 +1,13 @@
 // 强制使用 Edge Runtime
 export const runtime = 'edge';
 
-// 🌟 新增：安全获取 KV 数据库实例的封装函数
+// 安全获取 KV 数据库实例
 function getCacheDB() {
-  // EdgeOne 和 Cloudflare 通常会把绑定的变量直接挂载到全局对象上
-  if (typeof globalThis !== 'undefined' && globalThis.SYS_CACHE) {
-    return globalThis.SYS_CACHE;
+  if (typeof globalThis !== 'undefined' && globalThis.MATCH_KV) {
+    return globalThis.MATCH_KV;
   }
-  // 备用：Next.js 传统的环境变量读取方式
-  if (typeof process !== 'undefined' && process.env && process.env.SYS_CACHE) {
-    return process.env.SYS_CACHE;
+  if (typeof process !== 'undefined' && process.env && process.env.MATCH_KV) {
+    return process.env.MATCH_KV;
   }
   return null;
 }
@@ -43,17 +41,15 @@ export async function GET() {
       return { ...item, timeMs, shortT };
     });
 
-    // 🌟 2. 使用新方法读取 KV 存储
+    // 2. 读取 KV 存储 (使用原名 MATCH_KV 和 active_matches)
     const cacheDB = getCacheDB();
     let historyData = [];
     if (cacheDB) {
       try {
-        historyData = await cacheDB.get('data_sync_list', { type: 'json' }) || [];
+        historyData = await cacheDB.get('active_matches', { type: 'json' }) || [];
       } catch (e) {
         console.error('Cache read error:', e);
       }
-    } else {
-      console.warn('警告: 未找到 SYS_CACHE 绑定，KV 功能未生效');
     }
 
     // 3. 数据合并与 2 小时锁定逻辑
@@ -76,12 +72,12 @@ export async function GET() {
       return false;
     }).sort((a, b) => b.timeMs - a.timeMs);
 
-    // 🌟 5. 使用新方法写回 KV
+    // 5. 写回 KV
     if (cacheDB) {
-      await cacheDB.put('data_sync_list', JSON.stringify(finalData));
+      await cacheDB.put('active_matches', JSON.stringify(finalData));
     }
 
-    // 6. 生成输出文本
+    // 6. 生成 M3U 格式文本
     let content = '#EXTM3U\n';
     
     finalData.forEach(event => {
@@ -112,7 +108,7 @@ export async function GET() {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8',
-        'Content-Disposition': 'inline; filename="data.conf"',
+        'Content-Disposition': 'inline; filename="live.m3u"',
         'Access-Control-Allow-Origin': '*'
       }
     });
