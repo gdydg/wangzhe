@@ -3,53 +3,80 @@ export const runtime = 'edge';
 
 export async function GET() {
   try {
-    const targetUrl = 'https://zszb5.com/index.php?g=Wwapi&m=Shanmao&a=eventInfo';
-    const apiResponse = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      cache: 'no-store' 
-    });
-
-    const jsonData = await apiResponse.json();
-    
     const nowMs = Date.now();
     const thirtyMinsLaterMs = nowMs + 30 * 60 * 1000;
-    const bufferPastMs = nowMs - 15 * 60 * 1000;
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+    const fourHoursAgoMs = nowMs - 4 * 60 * 60 * 1000; 
 
-    const liveEvents = jsonData.data
-      .map(item => {
-        let gameTimeMs = 0;
-        let shortTime = '00:00';
-        
-        if (item.gameTime) {
-          const timeString = item.gameTime.includes('+') || item.gameTime.includes('Z') 
-            ? item.gameTime 
-            : `${item.gameTime}+08:00`;
-          gameTimeMs = new Date(timeString).getTime();
-          shortTime = item.gameTime.substring(11, 16);
-        }
-        
-        return { ...item, gameTimeMs, shortTime };
-      })
-      .filter(item => {
-        if (item.gameStage === '直播中') return true;
-        if (item.gameTimeMs >= bufferPastMs && item.gameTimeMs <= thirtyMinsLaterMs) return true;
-        return false;
-      })
-      .sort((a, b) => b.gameTimeMs - a.gameTimeMs);
+    // 1. 拉取外部数据
+    const targetUrl = 'https://zszb5.com/index.php?g=Wwapi&m=Shanmao&a=eventInfo';
+    const apiResponse = await fetch(targetUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      cache: 'no-store' 
+    });
+    const jsonData = await apiResponse.json();
+    
+    // 数据预处理
+    const freshData = jsonData.data.map(item => {
+      let timeMs = 0;
+      let shortT = '00:00';
+      if (item.gameTime) {
+        const tStr = item.gameTime.includes('+') || item.gameTime.includes('Z') 
+          ? item.gameTime 
+          : `${item.gameTime}+08:00`;
+        timeMs = new Date(tStr).getTime();
+        shortT = item.gameTime.substring(11, 16);
+      }
+      return { ...item, timeMs, shortT };
+    });
 
+    // 2. 读取 KV 存储 (环境变量已改为 SYS_CACHE，Key 改为 data_sync_list)
+    let historyData = [];
+    if (process.env.SYS_CACHE) {
+      try {
+        historyData = await process.env.SYS_CACHE.get('data_sync_list', { type: 'json' }) || [];
+      } catch (e) {
+        console.error('Cache read error:', e);
+      }
+    }
+
+    // 3. 合并去重与 2 小时锁定逻辑
+    const mergedMap = new Map();
+    historyData.forEach(item => mergedMap.set(item.matchId, item));
+
+    freshData.forEach(item => {
+      const timeElapsed = nowMs - item.timeMs;
+      // 满 2 小时，拒绝覆盖历史数据
+      if (timeElapsed >= twoHoursMs && mergedMap.has(item.matchId)) {
+        return; 
+      }
+      // 小于 2 小时，覆盖更新
+      mergedMap.set(item.matchId, item);
+    });
+
+    // 4. 数据清洗 (4 小时后清理)
+    const finalData = Array.from(mergedMap.values()).filter(item => {
+      if (item.timeMs >= fourHoursAgoMs && item.timeMs <= thirtyMinsLaterMs) {
+        return true;
+      }
+      return false;
+    }).sort((a, b) => b.timeMs - a.timeMs);
+
+    // 5. 写回 KV
+    if (process.env.SYS_CACHE) {
+      await process.env.SYS_CACHE.put('data_sync_list', JSON.stringify(finalData));
+    }
+
+    // 6. 生成输出文本
     let content = '#EXTM3U\n';
     
-    liveEvents.forEach(event => {
-      const baseTitle = `[${event.shortTime}]${event.lname}:${event.hname}_VS_${event.aname}`;
+    finalData.forEach(event => {
+      const baseTitle = `[${event.shortT}]${event.lname}:${event.hname}_VS_${event.aname}`;
       const logo = event.hicon || ''; 
       const group = '清流直连';
 
-      // 定义一个内部函数来处理和提取不同节点的流
       const extractStreams = (streamNode, label) => {
         if (!streamNode) return;
-        
         if (streamNode.m3u8) {
           content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${baseTitle}(${label}-m3u8)\n`;
           content += `${streamNode.m3u8}\n`;
@@ -60,13 +87,8 @@ export async function GET() {
         }
       };
 
-      // 1. 提取默认标清流
       extractStreams(event.stream, '标清');
-      
-      // 2. 提取备用/高清中文流 (部分赛事有)
       extractStreams(event.streamAmAli, '高清中文');
-      
-      // 3. 提取北美/高清英文流 (部分赛事有)
       if (event.streamNa && event.streamNa.live) {
         extractStreams(event.streamNa.live, '高清英文');
       }
@@ -76,11 +98,11 @@ export async function GET() {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8',
-        'Content-Disposition': 'inline; filename="live.m3u"',
+        'Content-Disposition': 'inline; filename="data.conf"', // 将默认下载文件名也改掉
         'Access-Control-Allow-Origin': '*'
       }
     });
   } catch (error) {
-    return new Response(`Error fetching data: ${error.message}`, { status: 500 });
+    return new Response(`Sync Error: ${error.message}`, { status: 500 });
   }
 }
