@@ -1,6 +1,19 @@
 // 强制使用 Edge Runtime
 export const runtime = 'edge';
 
+// 🌟 新增：安全获取 KV 数据库实例的封装函数
+function getCacheDB() {
+  // EdgeOne 和 Cloudflare 通常会把绑定的变量直接挂载到全局对象上
+  if (typeof globalThis !== 'undefined' && globalThis.SYS_CACHE) {
+    return globalThis.SYS_CACHE;
+  }
+  // 备用：Next.js 传统的环境变量读取方式
+  if (typeof process !== 'undefined' && process.env && process.env.SYS_CACHE) {
+    return process.env.SYS_CACHE;
+  }
+  return null;
+}
+
 export async function GET() {
   try {
     const nowMs = Date.now();
@@ -8,7 +21,7 @@ export async function GET() {
     const twoHoursMs = 2 * 60 * 60 * 1000;
     const fourHoursAgoMs = nowMs - 4 * 60 * 60 * 1000; 
 
-    // 1. 拉取外部数据
+    // 1. 拉取外部目标源站数据
     const targetUrl = 'https://zszb5.com/index.php?g=Wwapi&m=Shanmao&a=eventInfo';
     const apiResponse = await fetch(targetUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
@@ -30,27 +43,28 @@ export async function GET() {
       return { ...item, timeMs, shortT };
     });
 
-    // 2. 读取 KV 存储 (环境变量已改为 SYS_CACHE，Key 改为 data_sync_list)
+    // 🌟 2. 使用新方法读取 KV 存储
+    const cacheDB = getCacheDB();
     let historyData = [];
-    if (process.env.SYS_CACHE) {
+    if (cacheDB) {
       try {
-        historyData = await process.env.SYS_CACHE.get('data_sync_list', { type: 'json' }) || [];
+        historyData = await cacheDB.get('data_sync_list', { type: 'json' }) || [];
       } catch (e) {
         console.error('Cache read error:', e);
       }
+    } else {
+      console.warn('警告: 未找到 SYS_CACHE 绑定，KV 功能未生效');
     }
 
-    // 3. 合并去重与 2 小时锁定逻辑
+    // 3. 数据合并与 2 小时锁定逻辑
     const mergedMap = new Map();
     historyData.forEach(item => mergedMap.set(item.matchId, item));
 
     freshData.forEach(item => {
       const timeElapsed = nowMs - item.timeMs;
-      // 满 2 小时，拒绝覆盖历史数据
       if (timeElapsed >= twoHoursMs && mergedMap.has(item.matchId)) {
         return; 
       }
-      // 小于 2 小时，覆盖更新
       mergedMap.set(item.matchId, item);
     });
 
@@ -62,9 +76,9 @@ export async function GET() {
       return false;
     }).sort((a, b) => b.timeMs - a.timeMs);
 
-    // 5. 写回 KV
-    if (process.env.SYS_CACHE) {
-      await process.env.SYS_CACHE.put('data_sync_list', JSON.stringify(finalData));
+    // 🌟 5. 使用新方法写回 KV
+    if (cacheDB) {
+      await cacheDB.put('data_sync_list', JSON.stringify(finalData));
     }
 
     // 6. 生成输出文本
@@ -98,7 +112,7 @@ export async function GET() {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8',
-        'Content-Disposition': 'inline; filename="data.conf"', // 将默认下载文件名也改掉
+        'Content-Disposition': 'inline; filename="data.conf"',
         'Access-Control-Allow-Origin': '*'
       }
     });
