@@ -37,22 +37,30 @@ export async function GET() {
         if (item.gameTimeMs >= bufferPastMs && item.gameTimeMs <= thirtyMinsLaterMs) return true;
         return false;
       })
-      .sort((a, b) => b.gameTimeMs - a.gameTimeMs); // 降序排队
+      .sort((a, b) => b.gameTimeMs - a.gameTimeMs);
 
     let content = '清流直连,#genre#\n';
     
     liveEvents.forEach(event => {
-      // 拼接时间标：[19:00]联赛名:主队_VS_客队
-      const title = `[${event.shortTime}]${event.lname}:${event.hname}_VS_${event.aname}`;
+      const baseTitle = `[${event.shortTime}]${event.lname}:${event.hname}_VS_${event.aname}`;
       
-      // 线路 1: m3u8
-      if (event.stream && event.stream.m3u8) {
-        content += `${title}(m3u8),${event.stream.m3u8}\n`;
-      }
+      const extractStreamsTxt = (streamNode, label) => {
+        if (!streamNode) return;
+        
+        if (streamNode.m3u8) {
+          content += `${baseTitle}(${label}-m3u8),${streamNode.m3u8}\n`;
+        }
+        if (streamNode.flv) {
+          content += `${baseTitle}(${label}-flv),${streamNode.flv}\n`;
+        }
+      };
+
+      // 批量提取 3 个不同节点的源
+      extractStreamsTxt(event.stream, '标清');
+      extractStreamsTxt(event.streamAmAli, '高清中文');
       
-      // 线路 2: flv
-      if (event.stream && event.stream.flv) {
-        content += `${title}(flv),${event.stream.flv}\n`;
+      if (event.streamNa && event.streamNa.live) {
+        extractStreamsTxt(event.streamNa.live, '高清英文');
       }
     });
 
