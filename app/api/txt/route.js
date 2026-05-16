@@ -1,13 +1,43 @@
 // 强制使用 Edge Runtime
 export const runtime = 'edge';
-// 【关键修复】强制每次访问都动态执行，绝不使用静态缓存！
 export const dynamic = 'force-dynamic';
 
-// 安全获取 KV 数据库实例
-function getCacheDB() {
-  if (typeof globalThis !== 'undefined' && globalThis.MATCH_KV) return globalThis.MATCH_KV;
-  if (typeof process !== 'undefined' && process.env && process.env.MATCH_KV) return process.env.MATCH_KV;
-  return null;
+async function getCacheData() {
+  const url = process.env.SYS_DB_URL;
+  const token = process.env.SYS_DB_TOKEN;
+  if (!url || !token) return [];
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(['GET', 'active_matches']),
+      cache: 'no-store'
+    });
+    const resJson = await response.json();
+    return resJson.result ? JSON.parse(resJson.result) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function setCacheData(data) {
+  const url = process.env.SYS_DB_URL;
+  const token = process.env.SYS_DB_TOKEN;
+  if (!url || !token) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(['SET', 'active_matches', JSON.stringify(data)]),
+      cache: 'no-store'
+    });
+  } catch (e) {}
 }
 
 export async function GET() {
@@ -38,17 +68,8 @@ export async function GET() {
       return { ...item, timeMs, shortT };
     });
 
-    // 2. 从系统缓存中读取历史同步数据
-    const cacheDB = getCacheDB();
-    let historyData = [];
-    if (cacheDB) {
-      try {
-        // 根据 EdgeOne 文档规范，使用 { type: "json" } 读取
-        historyData = await cacheDB.get('active_matches', { type: 'json' }) || [];
-      } catch (e) {
-        console.error('Cache read error:', e);
-      }
-    }
+    // 2. 从 Upstash 数据库中获取历史同步数据
+    const historyData = await getCacheData();
 
     // 3. 数据合并与 2 小时锁定逻辑
     const mergedMap = new Map();
@@ -65,19 +86,15 @@ export async function GET() {
       return item.timeMs >= fourHoursAgoMs && item.timeMs <= thirtyMinsLaterMs;
     }).sort((a, b) => b.timeMs - a.timeMs);
 
-    // 5. 将更新后的干净数据同步回系统缓存 KV
-    if (cacheDB) {
-      // 根据 EdgeOne 文档，写入需要传递 string
-      await cacheDB.put('active_matches', JSON.stringify(finalData));
-    }
+    // 5. 同步回 Upstash 数据库
+    await setCacheData(finalData);
 
-    // 6. 输出 TXT
+    // 6. 转换为统一的 TXT 文本格式输出
     let content = '清流直连,#genre#\n';
-    // 增加一行隐蔽的调试信息，方便您确认 KV 是否连接成功（不影响播放器解析）
-    content += cacheDB ? '状态检测,KV数据库已连接\n' : '状态检测,未找到KV数据库\n';
     
     finalData.forEach(event => {
       const baseTitle = `[${event.shortT}]${event.lname}:${event.hname}_VS_${event.aname}`;
+      
       const extractStreamsTxt = (streamNode, label) => {
         if (!streamNode) return;
         if (streamNode.m3u8) content += `${baseTitle}(${label}-m3u8),${streamNode.m3u8}\n`;
@@ -98,6 +115,6 @@ export async function GET() {
       }
     });
   } catch (error) {
-    return new Response(`Error: ${error.message}`, { status: 500 });
+    return new Response(`Sync Error: ${error.message}`, { status: 500 });
   }
 }
