@@ -17,10 +17,8 @@ export async function GET() {
     const thirtyMinsLaterMs = nowMs + 30 * 60 * 1000;
     const bufferPastMs = nowMs - 15 * 60 * 1000;
 
-    // 1. 预处理数据、2. 过滤、3. 排序
     const liveEvents = jsonData.data
       .map(item => {
-        // 计算准确的时间戳
         let gameTimeMs = 0;
         let shortTime = '00:00';
         
@@ -29,40 +27,48 @@ export async function GET() {
             ? item.gameTime 
             : `${item.gameTime}+08:00`;
           gameTimeMs = new Date(timeString).getTime();
-          
-          // 截取类似 "2026-05-14T10:30:00" 中的 "10:30"
           shortTime = item.gameTime.substring(11, 16);
         }
         
         return { ...item, gameTimeMs, shortTime };
       })
       .filter(item => {
-        // 保留直播中，或者开赛时间在 [当前时间-15分钟, 当前时间+30分钟] 内的
         if (item.gameStage === '直播中') return true;
         if (item.gameTimeMs >= bufferPastMs && item.gameTimeMs <= thirtyMinsLaterMs) return true;
         return false;
       })
-      // 降序排序：b - a，时间戳越大（越晚）排越前
       .sort((a, b) => b.gameTimeMs - a.gameTimeMs);
 
     let content = '#EXTM3U\n';
     
     liveEvents.forEach(event => {
-      // 拼接时间标：[19:00]联赛名:主队_VS_客队
-      const title = `[${event.shortTime}]${event.lname}:${event.hname}_VS_${event.aname}`;
+      const baseTitle = `[${event.shortTime}]${event.lname}:${event.hname}_VS_${event.aname}`;
       const logo = event.hicon || ''; 
       const group = '清流直连';
+
+      // 定义一个内部函数来处理和提取不同节点的流
+      const extractStreams = (streamNode, label) => {
+        if (!streamNode) return;
+        
+        if (streamNode.m3u8) {
+          content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${baseTitle}(${label}-m3u8)\n`;
+          content += `${streamNode.m3u8}\n`;
+        }
+        if (streamNode.flv) {
+          content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${baseTitle}(${label}-flv)\n`;
+          content += `${streamNode.flv}\n`;
+        }
+      };
+
+      // 1. 提取默认标清流
+      extractStreams(event.stream, '标清');
       
-      // 线路 1: m3u8
-      if (event.stream && event.stream.m3u8) {
-        content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${title}(m3u8)\n`;
-        content += `${event.stream.m3u8}\n`;
-      }
+      // 2. 提取备用/高清中文流 (部分赛事有)
+      extractStreams(event.streamAmAli, '高清中文');
       
-      // 线路 2: flv
-      if (event.stream && event.stream.flv) {
-        content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${title}(flv)\n`;
-        content += `${event.stream.flv}\n`;
+      // 3. 提取北美/高清英文流 (部分赛事有)
+      if (event.streamNa && event.streamNa.live) {
+        extractStreams(event.streamNa.live, '高清英文');
       }
     });
 
