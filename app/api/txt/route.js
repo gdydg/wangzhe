@@ -97,8 +97,16 @@ export async function GET() {
       
       const extractStreamsTxt = (streamNode, label) => {
         if (!streamNode) return;
-        if (streamNode.m3u8) content += `${baseTitle}(${label}-m3u8),${streamNode.m3u8}\n`;
-        if (streamNode.flv) content += `${baseTitle}(${label}-flv),${streamNode.flv}\n`;
+
+        // --- 增加 URL 域名替换逻辑 ---
+        const processUrl = (url) => {
+          if (!url) return '';
+          return url.replace('qinl-play.agiaexpress.com', 'tv8.gitee.tech/qinl');
+        };
+        // -----------------------------
+
+        if (streamNode.m3u8) content += `${baseTitle}(${label}-m3u8),${processUrl(streamNode.m3u8)}\n`;
+        if (streamNode.flv) content += `${baseTitle}(${label}-flv),${processUrl(streamNode.flv)}\n`;
       };
 
       extractStreamsTxt(event.stream, '标清');
