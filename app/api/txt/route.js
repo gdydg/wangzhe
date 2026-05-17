@@ -47,7 +47,6 @@ export async function GET() {
     const twoHoursMs = 2 * 60 * 60 * 1000;
     const fourHoursAgoMs = nowMs - 4 * 60 * 60 * 1000;
 
-    // 1. 拉取外部目标源站数据
     const targetUrl = 'https://zszb5.com/index.php?g=Wwapi&m=Shanmao&a=eventInfo';
     const apiResponse = await fetch(targetUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
@@ -68,10 +67,7 @@ export async function GET() {
       return { ...item, timeMs, shortT };
     });
 
-    // 2. 从 Upstash 数据库中获取历史同步数据
     const historyData = await getCacheData();
-
-    // 3. 数据合并与 2 小时锁定逻辑
     const mergedMap = new Map();
     historyData.forEach(item => mergedMap.set(item.matchId, item));
 
@@ -81,16 +77,13 @@ export async function GET() {
       mergedMap.set(item.matchId, item);
     });
 
-    // 4. 时效清洗
     const finalData = Array.from(mergedMap.values()).filter(item => {
       return item.timeMs >= fourHoursAgoMs && item.timeMs <= thirtyMinsLaterMs;
     }).sort((a, b) => b.timeMs - a.timeMs);
 
-    // 5. 同步回 Upstash 数据库
     await setCacheData(finalData);
 
-    // 6. 转换为统一的 TXT 文本格式输出
-    let content = '清流直连,#genre#\n';
+    let content = '清流赛事,#genre#\n';
     
     finalData.forEach(event => {
       const baseTitle = `[${event.shortT}]${event.lname}:${event.hname}_VS_${event.aname}`;
@@ -98,15 +91,28 @@ export async function GET() {
       const extractStreamsTxt = (streamNode, label) => {
         if (!streamNode) return;
 
-        // --- 增加 URL 域名替换逻辑 ---
         const processUrl = (url) => {
           if (!url) return '';
           return url.replace('qinl-play.agiaexpress.com', 'tv8.gitee.tech/qinl');
         };
-        // -----------------------------
 
-        if (streamNode.m3u8) content += `${baseTitle}(${label}-m3u8),${processUrl(streamNode.m3u8)}\n`;
-        if (streamNode.flv) content += `${baseTitle}(${label}-flv),${processUrl(streamNode.flv)}\n`;
+        if (streamNode.m3u8) {
+          // 1. 直连 TXT
+          content += `${baseTitle}(${label}-直连-m3u8),${streamNode.m3u8}\n`;
+          // 2. 代理 TXT
+          const proxiedUrl = processUrl(streamNode.m3u8);
+          if (proxiedUrl !== streamNode.m3u8) {
+            content += `${baseTitle}(${label}-代理-m3u8),${proxiedUrl}\n`;
+          }
+        }
+        
+        if (streamNode.flv) {
+          content += `${baseTitle}(${label}-直连-flv),${streamNode.flv}\n`;
+          const proxiedUrl = processUrl(streamNode.flv);
+          if (proxiedUrl !== streamNode.flv) {
+            content += `${baseTitle}(${label}-代理-flv),${proxiedUrl}\n`;
+          }
+        }
       };
 
       extractStreamsTxt(event.stream, '标清');
