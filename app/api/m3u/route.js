@@ -110,13 +110,21 @@ export async function GET() {
 
       const extractStreams = (streamNode, label) => {
         if (!streamNode) return;
+        
+        // --- 修改点：辅助函数，用于替换目标域名 ---
+        const processUrl = (url) => {
+            if (!url) return '';
+            return url.replace('qinl-play.agiaexpress.com', 'tv8.gitee.tech/qinl');
+        };
+        // ------------------------------------------
+
         if (streamNode.m3u8) {
           content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${baseTitle}(${label}-m3u8)\n`;
-          content += `${streamNode.m3u8}\n`;
+          content += `${processUrl(streamNode.m3u8)}\n`; // 调用辅助函数
         }
         if (streamNode.flv) {
           content += `#EXTINF:-1 tvg-logo="${logo}" group-title="${group}",${baseTitle}(${label}-flv)\n`;
-          content += `${streamNode.flv}\n`;
+          content += `${processUrl(streamNode.flv)}\n`; // 调用辅助函数
         }
       };
 
