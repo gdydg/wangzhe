@@ -94,7 +94,7 @@ export async function GET() {
         
         const processUrl = (url) => {
             if (!url) return '';
-            return url.replace('qinl-play.agiaexpress.com', 'tv8.gitee.tech/qinl');
+            return url.replace('qinl-play.agiaexpress.com', '688gerger.zh-cn.edgeone.run/qinl');
         };
 
         if (streamNode.m3u8) {
