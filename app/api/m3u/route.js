@@ -2,6 +2,12 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
+// 获取特殊序号符号
+function getNumberIcon(index) {
+  const icons = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+  return icons[index - 1] || `(${index})`;
+}
+
 async function getCacheData() {
   const url = process.env.SYS_DB_URL;
   const token = process.env.SYS_DB_TOKEN;
@@ -67,7 +73,6 @@ export async function GET() {
       return { ...item, timeMs, shortT };
     });
 
-    // 保留了原来的 DB 缓存读取与合并逻辑
     const historyData = await getCacheData();
     const mergedMap = new Map();
     historyData.forEach(item => mergedMap.set(item.matchId, item));
@@ -82,7 +87,6 @@ export async function GET() {
       return item.timeMs >= fourHoursAgoMs && item.timeMs <= thirtyMinsLaterMs;
     }).sort((a, b) => b.timeMs - a.timeMs);
 
-    // 保留了原来的 DB 缓存写入逻辑
     await setCacheData(finalData);
 
     let content = '#EXTM3U\n';
@@ -91,29 +95,29 @@ export async function GET() {
       const baseTitle = `[${event.shortT}]${event.lname}:${event.hname}_VS_${event.aname}`;
       const logo = event.hicon || ''; 
 
-      const extractStreams = (streamNode, label) => {
-        if (!streamNode) return;
+      let streamCount = 0; // 每场比赛线路计数器初始化
+
+      const extractStreams = (streamNode) => {
+        if (!streamNode || !streamNode.m3u8) return;
         
         const processUrl = (url) => {
             if (!url) return '';
             return url.replace('qinl-play.agiaexpress.com', 'tv8.gitee.tech/qinl');
         };
 
-        // 仅保留 m3u8 的代理拼接逻辑，剔除直连和 FLV
-        if (streamNode.m3u8) {
-          const proxiedUrl = processUrl(streamNode.m3u8);
-          // 去除了原来判断 proxiedUrl !== streamNode.m3u8 的限制，统一只输出代理组的源
-          content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流赛事",${baseTitle}(${label})\n`;
-          content += `${proxiedUrl}\n`;
-        }
-        
-        // 删除了 streamNode.flv 的所有判断和输出代码
+        const proxiedUrl = processUrl(streamNode.m3u8);
+        streamCount++; // 只要有源，计数器加 1
+        const label = getNumberIcon(streamCount); // 获取对应序号
+
+        content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流赛事",${baseTitle}${label}\n`;
+        content += `${proxiedUrl}\n`;
       };
 
-      extractStreams(event.stream, '标清');
-      extractStreams(event.streamAmAli, '高清中文');
+      // 依次检测并提取，自动递增序号
+      extractStreams(event.stream);
+      extractStreams(event.streamAmAli);
       if (event.streamNa && event.streamNa.live) {
-        extractStreams(event.streamNa.live, '高清英文');
+        extractStreams(event.streamNa.live);
       }
     });
 
