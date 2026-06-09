@@ -98,13 +98,11 @@ export async function GET() {
         };
 
         if (streamNode.m3u8) {
-          // 只生成并输出 m3u8 的代理线路
+          // 仅生成 m3u8 格式的代理线路，不输出直连和 flv
           const proxiedUrl = processUrl(streamNode.m3u8);
           content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流代理",${baseTitle}(${label}-代理-m3u8)\n`;
           content += `${proxiedUrl}\n`;
         }
-        
-        // 已彻底移除 FLV 的相关判断和输出逻辑
       };
 
       extractStreams(event.stream, '标清');
