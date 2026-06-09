@@ -98,29 +98,13 @@ export async function GET() {
         };
 
         if (streamNode.m3u8) {
-          // 1. 保留原始直连线路
-          content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流直连",${baseTitle}(${label}-直连-m3u8)\n`;
-          content += `${streamNode.m3u8}\n`;
-          
-          // 2. 生成代理线路 (仅当 URL 发生变化时生成，避免重复)
+          // 只生成并输出 m3u8 的代理线路
           const proxiedUrl = processUrl(streamNode.m3u8);
-          if (proxiedUrl !== streamNode.m3u8) {
-            content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流代理",${baseTitle}(${label}-代理-m3u8)\n`;
-            content += `${proxiedUrl}\n`;
-          }
+          content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流代理",${baseTitle}(${label}-代理-m3u8)\n`;
+          content += `${proxiedUrl}\n`;
         }
         
-        if (streamNode.flv) {
-          // FLV 同样处理两套
-          content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流直连",${baseTitle}(${label}-直连-flv)\n`;
-          content += `${streamNode.flv}\n`;
-          
-          const proxiedUrl = processUrl(streamNode.flv);
-          if (proxiedUrl !== streamNode.flv) {
-            content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流代理",${baseTitle}(${label}-代理-flv)\n`;
-            content += `${proxiedUrl}\n`;
-          }
-        }
+        // 已彻底移除 FLV 的相关判断和输出逻辑
       };
 
       extractStreams(event.stream, '标清');
