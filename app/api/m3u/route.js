@@ -67,6 +67,7 @@ export async function GET() {
       return { ...item, timeMs, shortT };
     });
 
+    // 保留了原来的 DB 缓存读取与合并逻辑
     const historyData = await getCacheData();
     const mergedMap = new Map();
     historyData.forEach(item => mergedMap.set(item.matchId, item));
@@ -81,6 +82,7 @@ export async function GET() {
       return item.timeMs >= fourHoursAgoMs && item.timeMs <= thirtyMinsLaterMs;
     }).sort((a, b) => b.timeMs - a.timeMs);
 
+    // 保留了原来的 DB 缓存写入逻辑
     await setCacheData(finalData);
 
     let content = '#EXTM3U\n';
@@ -97,12 +99,15 @@ export async function GET() {
             return url.replace('qinl-play.agiaexpress.com', 'tv8.gitee.tech/qinl');
         };
 
+        // 仅保留 m3u8 的代理拼接逻辑，剔除直连和 FLV
         if (streamNode.m3u8) {
-          // 仅生成 m3u8 格式的代理线路，不输出直连和 flv
           const proxiedUrl = processUrl(streamNode.m3u8);
-          content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流代理",${baseTitle}(${label}-代理-m3u8)\n`;
+          // 去除了原来判断 proxiedUrl !== streamNode.m3u8 的限制，统一只输出代理组的源
+          content += `#EXTINF:-1 tvg-logo="${logo}" group-title="清流赛事",${baseTitle}(${label})\n`;
           content += `${proxiedUrl}\n`;
         }
+        
+        // 删除了 streamNode.flv 的所有判断和输出代码
       };
 
       extractStreams(event.stream, '标清');
