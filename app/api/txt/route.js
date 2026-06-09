@@ -2,6 +2,12 @@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
+// 获取特殊序号符号
+function getNumberIcon(index) {
+  const icons = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+  return icons[index - 1] || `(${index})`;
+}
+
 async function getCacheData() {
   const url = process.env.SYS_DB_URL;
   const token = process.env.SYS_DB_TOKEN;
@@ -88,23 +94,24 @@ export async function GET() {
     finalData.forEach(event => {
       const baseTitle = `[${event.shortT}]${event.lname}:${event.hname}_VS_${event.aname}`;
       
+      let streamCount = 0; // 每场比赛线路计数器初始化
+
       const extractStreamsTxt = (streamNode) => {
-        if (!streamNode) return;
+        if (!streamNode || !streamNode.m3u8) return;
 
         const processUrl = (url) => {
           if (!url) return '';
           return url.replace('qinl-play.agiaexpress.com', 'tv8.gitee.tech/qinl');
         };
 
-        // 仅保留 m3u8 的代理拼接逻辑，剔除直连和 FLV
-        if (streamNode.m3u8) {
-          const proxiedUrl = processUrl(streamNode.m3u8);
-          // 去掉了 (${label}) 后缀，只输出基础标题
-          content += `${baseTitle},${proxiedUrl}\n`;
-        }
+        const proxiedUrl = processUrl(streamNode.m3u8);
+        streamCount++; // 只要有源，计数器加 1
+        const label = getNumberIcon(streamCount); // 获取对应序号
+        
+        content += `${baseTitle}${label},${proxiedUrl}\n`;
       };
 
-      // 调用时去掉了所有的清晰度传参
+      // 依次检测并提取，自动递增序号
       extractStreamsTxt(event.stream);
       extractStreamsTxt(event.streamAmAli);
       if (event.streamNa && event.streamNa.live) extractStreamsTxt(event.streamNa.live);
