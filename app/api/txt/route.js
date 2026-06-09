@@ -88,7 +88,7 @@ export async function GET() {
     finalData.forEach(event => {
       const baseTitle = `[${event.shortT}]${event.lname}:${event.hname}_VS_${event.aname}`;
       
-      const extractStreamsTxt = (streamNode, label) => {
+      const extractStreamsTxt = (streamNode) => {
         if (!streamNode) return;
 
         const processUrl = (url) => {
@@ -99,13 +99,15 @@ export async function GET() {
         // 仅保留 m3u8 的代理拼接逻辑，剔除直连和 FLV
         if (streamNode.m3u8) {
           const proxiedUrl = processUrl(streamNode.m3u8);
-          content += `${baseTitle}(${label}),${proxiedUrl}\n`;
+          // 去掉了 (${label}) 后缀，只输出基础标题
+          content += `${baseTitle},${proxiedUrl}\n`;
         }
       };
 
-      extractStreamsTxt(event.stream, '标清');
-      extractStreamsTxt(event.streamAmAli, '高清中文');
-      if (event.streamNa && event.streamNa.live) extractStreamsTxt(event.streamNa.live, '高清英文');
+      // 调用时去掉了所有的清晰度传参
+      extractStreamsTxt(event.stream);
+      extractStreamsTxt(event.streamAmAli);
+      if (event.streamNa && event.streamNa.live) extractStreamsTxt(event.streamNa.live);
     });
 
     return new Response(content, {
