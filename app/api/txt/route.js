@@ -96,22 +96,10 @@ export async function GET() {
           return url.replace('qinl-play.agiaexpress.com', 'tv8.gitee.tech/qinl');
         };
 
+        // 仅保留 m3u8 的代理拼接逻辑，剔除直连和 FLV
         if (streamNode.m3u8) {
-          // 1. 直连 TXT
-          content += `${baseTitle}(${label}-直连-m3u8),${streamNode.m3u8}\n`;
-          // 2. 代理 TXT
           const proxiedUrl = processUrl(streamNode.m3u8);
-          if (proxiedUrl !== streamNode.m3u8) {
-            content += `${baseTitle}(${label}-代理-m3u8),${proxiedUrl}\n`;
-          }
-        }
-        
-        if (streamNode.flv) {
-          content += `${baseTitle}(${label}-直连-flv),${streamNode.flv}\n`;
-          const proxiedUrl = processUrl(streamNode.flv);
-          if (proxiedUrl !== streamNode.flv) {
-            content += `${baseTitle}(${label}-代理-flv),${proxiedUrl}\n`;
-          }
+          content += `${baseTitle}(${label}),${proxiedUrl}\n`;
         }
       };
 
