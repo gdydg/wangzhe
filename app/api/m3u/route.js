@@ -102,7 +102,7 @@ export async function GET() {
         
         const processUrl = (url) => {
             if (!url) return '';
-            return url.replace('qinl-play.agiaexpress.com', 'tv8.gitee.tech/qinl');
+            return url.replace('play.br60g6.com', 'tv8.gitee.tech/qinl');
         };
 
         const proxiedUrl = processUrl(streamNode.m3u8);
