@@ -53,7 +53,7 @@ export async function GET() {
     const twoHoursMs = 2 * 60 * 60 * 1000;
     const fourHoursAgoMs = nowMs - 4 * 60 * 60 * 1000;
 
-    const targetUrl = 'https://zszb5.com/index.php?g=Wwapi&m=Shanmao&a=eventInfo';
+    const targetUrl = 'https://www.zszb9.com/index.php?g=Wwapi&m=Shanmao&a=eventInfo';
     const apiResponse = await fetch(targetUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       cache: 'no-store' 
